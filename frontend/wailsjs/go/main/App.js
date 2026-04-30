@@ -6,6 +6,30 @@ export function Addition(arg1, arg2) {
   return window['go']['main']['App']['Addition'](arg1, arg2);
 }
 
+export function ClearData() {
+  return window['go']['main']['App']['ClearData']();
+}
+
+export function CreateEmployee(arg1) {
+  return window['go']['main']['App']['CreateEmployee'](arg1);
+}
+
+export function DeleteEmployee(arg1) {
+  return window['go']['main']['App']['DeleteEmployee'](arg1);
+}
+
+export function GetAllEmployees() {
+  return window['go']['main']['App']['GetAllEmployees']();
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function Seed() {
+  return window['go']['main']['App']['Seed']();
+}
+
+export function UpdateEmployee(arg1) {
+  return window['go']['main']['App']['UpdateEmployee'](arg1);
 }

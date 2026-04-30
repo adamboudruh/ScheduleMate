@@ -1,68 +1,71 @@
 <script>
-  import {Addition} from '../wailsjs/go/main/App.js'
+  import { GetAllEmployees, CreateEmployee, UpdateEmployee, DeleteEmployee } from '../wailsjs/go/main/App.js'
+  import { Seed, ClearData } from '../wailsjs/go/main/App.js'
+  import CreateEmployeeModal from './CreateEmployeeModal.svelte';
 
-  let num1 = 0;
-  let num2 = 0;
-  let sum = 0;
-
-  function add() {
-    Addition(num1, num2).then(result => sum = result)
+  let employees = [];
+  let showCreateEmployeeModal = false;
+  
+  async function handleSave(event) {
+    await CreateEmployee(event.detail);
+    showCreateEmployeeModal = false;
+    loadEmployees();
   }
+
+  async function loadEmployees() {
+    employees = await GetAllEmployees();
+  }
+
+  async function seed() {
+    await Seed();
+    loadEmployees();
+  }
+
+  async function clear() {
+    await ClearData();
+    loadEmployees();
+  }
+
+  loadEmployees();
 </script>
 
 <main>
-  <h2>Simple Adder</h2>
-  <div class="result" id="result">Sum: {sum}</div>
-  <div class="input-box" id="input">
-    <input autocomplete="off" bind:value={num1} class="input" id="num1" type="number"/>
-    <input autocomplete="off" bind:value={num2} class="input" id="num2" type="number"/>
-    <button class="btn" on:click={add}>Add</button>
-  </div>
+  <h2>Employees</h2>
+  <button class="btn" on:click={seed}>Seed</button>
+  <button class="btn" on:click={clear}>Clear</button>
+  <button class="btn" on:click={() => showCreateEmployeeModal = true}>Add Employee</button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Desired Hours</th>
+        <th>Wage</th>
+      </tr>
+    </thead>
+    <tbody>
+      {#each employees as emp}
+        <tr>
+          <td>{emp.id}</td>
+          <td>{emp.name}</td>
+          <td>{emp.role}</td>
+          <td>{emp.desiredHours}</td>
+          <td>{emp.wage}</td>
+        </tr>
+      {/each}
+    </tbody>
+  </table>
 </main>
 
+<CreateEmployeeModal
+  show={showCreateEmployeeModal}
+  title="Create Employee"
+  on:submit={handleSave}
+  on:close={() => showCreateEmployeeModal = false}
+/>
+
 <style>
-
-  /* .result {
-    height: 20px;
-    line-height: 20px;
-    margin: 1.5rem auto;
-  }
-
-  .input-box .btn {
-    width: 60px;
-    height: 30px;
-    line-height: 30px;
-    border-radius: 3px;
-    border: none;
-    margin: 0 0 0 20px;
-    padding: 0 8px;
-    cursor: pointer;
-  }
-
-  .input-box .btn:hover {
-    background-image: linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%);
-    color: #333333;
-  }
-
-  .input-box .input {
-    border: none;
-    border-radius: 3px;
-    outline: none;
-    height: 30px;
-    line-height: 30px;
-    padding: 0 10px;
-    background-color: rgba(240, 240, 240, 1);
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .input-box .input:hover {
-    border: none;
-    background-color: rgba(255, 255, 255, 1);
-  }
-
-  .input-box .input:focus {
-    border: none;
-    background-color: rgba(255, 255, 255, 1);
-  } */
 
 </style>
