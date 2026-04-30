@@ -1,4 +1,4 @@
-CREATE TABLE employee (
+CREATE TABLE IF NOT EXISTS employee (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     name          TEXT NOT NULL,
     role          TEXT,
@@ -6,23 +6,22 @@ CREATE TABLE employee (
     wage          REAL
 );
 
-CREATE TABLE availability (
+CREATE TABLE IF NOT EXISTS availability (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER NOT NULL,
     day_of_week INTEGER NOT NULL,
     start_time  TEXT NOT NULL,
     end_time    TEXT NOT NULL,
-    FOREIGN KEY (employee_id) REFERENCES employee(id) ON DELETE CASCADE,
-    UNIQUE (employee_id, day_of_week)
+    FOREIGN KEY (employee_id) REFERENCES employee(id) ON DELETE CASCADE
 );
 
-CREATE TABLE schedule (
+CREATE TABLE IF NOT EXISTS schedule (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     week_of TEXT NOT NULL UNIQUE,
     notes   TEXT
 );
 
-CREATE TABLE shift (
+CREATE TABLE IF NOT EXISTS shift (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     schedule_id INTEGER NOT NULL,
     employee_id INTEGER NOT NULL,
@@ -33,9 +32,35 @@ CREATE TABLE shift (
     FOREIGN KEY (employee_id) REFERENCES employee(id) ON DELETE CASCADE
 );
 
-CREATE TABLE store_hours (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    day_of_week INTEGER NOT NULL UNIQUE,
-    open_time   TEXT NOT NULL,
-    close_time  TEXT NOT NULL
+-- replaces store_hours
+CREATE TABLE IF NOT EXISTS day_settings (
+    day_of_week          INTEGER PRIMARY KEY,
+    open_time            TEXT NOT NULL,
+    close_time           TEXT NOT NULL,
+    schedulable_open     TEXT, -- nullable, used when allow_outside_hours = true
+    schedulable_close    TEXT, -- nullable, used when allow_outside_hours = true
+    employees_needed     INTEGER NOT NULL DEFAULT 2
 );
+
+-- always exactly one row
+CREATE TABLE IF NOT EXISTS settings (
+    id                      INTEGER PRIMARY KEY DEFAULT 1,
+    min_shift_length        INTEGER NOT NULL DEFAULT 4, -- hours
+    max_shift_length        INTEGER NOT NULL DEFAULT 8, -- hours
+    allow_outside_hours     INTEGER NOT NULL DEFAULT 0 -- boolean
+);
+
+-- Insert default settings if they don't exist
+
+INSERT OR IGNORE INTO settings (id, min_shift_length, max_shift_length, allow_outside_hours)
+VALUES (1, 4, 8, 0); -- default settings: 4-8 hour shifts, no scheduling outside of open hours
+
+INSERT OR IGNORE INTO day_settings (day_of_week, open_time, close_time, employees_needed)
+VALUES
+    (1, '09:00', '21:00', 2),
+    (2, '09:00', '21:00', 2),
+    (3, '09:00', '21:00', 2),
+    (4, '09:00', '21:00', 2),
+    (5, '09:00', '21:00', 2),
+    (6, '09:00', '21:00', 2),
+    (7, '09:00', '21:00', 2); -- default day settings: 9 AM to 9 PM, 2 employees needed

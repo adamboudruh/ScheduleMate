@@ -30,10 +30,3 @@ type Shift struct {
 	StartTime  string `json:"startTime"`
 	EndTime    string `json:"endTime"`
 }
-
-type StoreHours struct {
-	ID        int    `json:"id"`
-	DayOfWeek int    `json:"dayOfWeek"`
-	OpenTime  string `json:"openTime"`
-	CloseTime string `json:"closeTime"`
-}
