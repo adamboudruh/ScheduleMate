@@ -26,25 +26,25 @@ func GetAvailabilityByEmployee(employeeID int) ([]models.Availability, error) {
 	return availability, nil
 }
 
-func CreateAvailability(a models.Availability) (int64, error) {
+func CreateAvailability(a models.Availability) (int64, models.ValidationResult) {
 	// input validation
 	if a.EmployeeID == 0 {
-		return 0, fmt.Errorf("employee_id is required")
+		return 0, models.ValidationResult{Errors: []string{"Employee ID is required"}}
 	}
 	if a.DayOfWeek < 1 || a.DayOfWeek > 7 {
-		return 0, fmt.Errorf("day_of_week must be between 1 and 7")
+		return 0, models.ValidationResult{Errors: []string{"Day of week must be between 1 and 7"}}
 	}
 	if a.StartTime == "" || a.EndTime == "" {
-		return 0, fmt.Errorf("start_time and end_time are required")
+		return 0, models.ValidationResult{Errors: []string{"Start time and end time are required"}}
 	}
 	if a.StartTime >= a.EndTime {
-		return 0, fmt.Errorf("start_time must be before end_time")
+		return 0, models.ValidationResult{Errors: []string{"Start time must be before end time"}}
 	}
 
 	// conflict detection:
 	// result := CheckAvailabilityConflict(a)
 	// if len(result.Errors) > 0 {
-	// 	return 0, fmt.Errorf(strings.Join(result.Errors, "; "))
+	// 	return 0, models.ValidationResult{Errors: result.Errors}
 	// }
 	// pass result.Warnings back up to caller when wired in
 
@@ -53,37 +53,44 @@ func CreateAvailability(a models.Availability) (int64, error) {
 		a.EmployeeID, a.DayOfWeek, a.StartTime, a.EndTime,
 	)
 	if err != nil {
-		return 0, err
+		return 0, models.ValidationResult{Fatal: err}
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, models.ValidationResult{Fatal: err}
+	}
+	return id, models.ValidationResult{}
 }
 
-func UpdateAvailability(a models.Availability) error {
+func UpdateAvailability(a models.Availability) models.ValidationResult {
 	// input validation
 	if a.ID == 0 {
-		return fmt.Errorf("id is required")
+		return models.ValidationResult{Errors: []string{"ID is required"}}
 	}
 	if a.DayOfWeek < 1 || a.DayOfWeek > 7 {
-		return fmt.Errorf("day_of_week must be between 1 and 7")
+		return models.ValidationResult{Errors: []string{"Day of week must be between 1 and 7"}}
 	}
 	if a.StartTime == "" || a.EndTime == "" {
-		return fmt.Errorf("start_time and end_time are required")
+		return models.ValidationResult{Errors: []string{"Start time and end time are required"}}
 	}
 	if a.StartTime >= a.EndTime {
-		return fmt.Errorf("start_time must be before end_time")
+		return models.ValidationResult{Errors: []string{"Start time must be before end time"}}
 	}
 
 	// conflict detection
 	// result := CheckAvailabilityConflict(a)
 	// if len(result.Errors) > 0 {
-	// 	return fmt.Errorf(strings.Join(result.Errors, "; "))
+	// 	return models.ValidationResult{Errors: result.Errors}
 	// }
 
 	_, err := DB.Exec(
 		"UPDATE availability SET day_of_week=?, start_time=?, end_time=? WHERE id=?",
 		a.DayOfWeek, a.StartTime, a.EndTime, a.ID,
 	)
-	return err
+	if err != nil {
+		return models.ValidationResult{Fatal: err}
+	}
+	return models.ValidationResult{}
 }
 
 func DeleteAvailability(id int) error {

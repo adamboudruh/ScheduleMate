@@ -30,3 +30,11 @@ type Shift struct {
 	StartTime  string `json:"startTime"`
 	EndTime    string `json:"endTime"`
 }
+
+// -- Validation Result Struct for conflict detection --
+
+type ValidationResult struct {
+	Errors   []string // blocks the save — business logic violations
+	Warnings []string // doesn't block — soft constraints, shown to user
+	Fatal    error    // unexpected failure — DB error, not a validation issue
+}

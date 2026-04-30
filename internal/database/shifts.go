@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"schedulemate/internal/models"
+	// "schedulemate/internal/services"
 )
 
 func GetShiftsBySchedule(scheduleID int) ([]models.Shift, error) {
@@ -47,22 +48,22 @@ func GetShiftsByEmployee(employeeID int) ([]models.Shift, error) {
 	return shifts, nil
 }
 
-func CreateShift(s models.Shift) (int64, error) {
+func CreateShift(s models.Shift) (int64, models.ValidationResult) {
 	// input validation
 	if s.ScheduleID == 0 {
-		return 0, fmt.Errorf("schedule_id is required")
+		return 0, models.ValidationResult{Errors: []string{"Schedule ID is required"}}
 	}
 	if s.EmployeeID == 0 {
-		return 0, fmt.Errorf("employee_id is required")
+		return 0, models.ValidationResult{Errors: []string{"Employee ID is required"}}
 	}
 	if s.DayOfWeek < 1 || s.DayOfWeek > 7 {
-		return 0, fmt.Errorf("day_of_week must be between 1 and 7")
+		return 0, models.ValidationResult{Errors: []string{"Day of week must be between 1 and 7"}}
 	}
 	if s.StartTime == "" || s.EndTime == "" {
-		return 0, fmt.Errorf("start_time and end_time are required")
+		return 0, models.ValidationResult{Errors: []string{"Start time and end time are required"}}
 	}
 	if s.StartTime >= s.EndTime {
-		return 0, fmt.Errorf("start_time must be before end_time")
+		return 0, models.ValidationResult{Errors: []string{"Start time must be before end time"}}
 	}
 
 	// conflict detection
@@ -77,24 +78,28 @@ func CreateShift(s models.Shift) (int64, error) {
 		s.ScheduleID, s.EmployeeID, s.DayOfWeek, s.StartTime, s.EndTime,
 	)
 	if err != nil {
-		return 0, err
+		return 0, models.ValidationResult{Fatal: err}
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, models.ValidationResult{Fatal: err}
+	}
+	return id, models.ValidationResult{}
 }
 
-func UpdateShift(s models.Shift) error {
+func UpdateShift(s models.Shift) (models.ValidationResult) {
 	// Layer 1: input validation
 	if s.ID == 0 {
-		return fmt.Errorf("id is required")
+		return models.ValidationResult{Errors: []string{"ID is required"}}
 	}
 	if s.DayOfWeek < 1 || s.DayOfWeek > 7 {
-		return fmt.Errorf("day_of_week must be between 1 and 7")
+		return models.ValidationResult{Errors: []string{"Day of week must be between 1 and 7"}}
 	}
 	if s.StartTime == "" || s.EndTime == "" {
-		return fmt.Errorf("start_time and end_time are required")
+		return models.ValidationResult{Errors: []string{"Start time and end time are required"}}
 	}
 	if s.StartTime >= s.EndTime {
-		return fmt.Errorf("start_time must be before end_time")
+		return models.ValidationResult{Errors: []string{"Start time must be before end time"}}
 	}
 
 	// conflict detection:
@@ -107,7 +112,10 @@ func UpdateShift(s models.Shift) error {
 		"UPDATE shift SET schedule_id=?, employee_id=?, day_of_week=?, start_time=?, end_time=? WHERE id=?",
 		s.ScheduleID, s.EmployeeID, s.DayOfWeek, s.StartTime, s.EndTime, s.ID,
 	)
-	return err
+	if err != nil {
+		return models.ValidationResult{Fatal: err}
+	}
+	return models.ValidationResult{}
 }
 
 func DeleteShift(id int) error {
