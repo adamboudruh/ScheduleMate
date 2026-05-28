@@ -5,6 +5,7 @@ type Employee struct {
 	Name         string  `json:"name"`
 	Role         string  `json:"role"`
 	DesiredHours int     `json:"desiredHours"`
+	MaxHours     int     `json:"maxHours"`
 	Wage         float64 `json:"wage"`
 }
 
@@ -31,10 +32,27 @@ type Shift struct {
 	EndTime    string `json:"endTime"`
 }
 
-// -- Validation Result Struct for conflict detection --
+type DaySettings struct {
+	DayOfWeek        int    `json:"dayOfWeek"`
+	OpenTime         string `json:"openTime"`
+	CloseTime        string `json:"closeTime"`
+	SchedulableOpen  string `json:"schedulableOpen"`  // nullable
+	SchedulableClose string `json:"schedulableClose"` // nullable
+	EmployeesNeeded  int    `json:"employeesNeeded"`
+}
+
+type Settings struct {
+	ID                int  `json:"id"`
+	MinShiftLength    int  `json:"minShiftLength"`
+	MaxShiftLength    int  `json:"maxShiftLength"`
+	AllowOutsideHours bool `json:"allowOutsideHours"`
+	TimeBetweenShifts int  `json:"timeBetweenShifts"`
+}
+
+// ValidationResult Struct for conflict detection
 
 type ValidationResult struct {
-	Errors   []string // blocks the save — business logic violations
-	Warnings []string // doesn't block — soft constraints, shown to user
-	Fatal    error    // unexpected failure — DB error, not a validation issue
+	Errors   []string // blocks the save - business logic violations
+	Warnings []string // doesn't block - soft constraints, shown to user
+	Fatal    error    // unexpected failure - DB error, not a validation issue
 }

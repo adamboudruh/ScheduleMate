@@ -6,6 +6,7 @@ import (
 
 	"schedulemate/internal/database"
 	"schedulemate/internal/models"
+	"schedulemate/internal/solver"
 )
 
 // App struct
@@ -56,6 +57,48 @@ func (a *App) DeleteEmployee(id int) error {
 
 func (a *App) Seed() error {
 	return database.Seed()
+}
+
+func (a *App) GenerateSchedule(scheduleID int) (solver.SolverResult, error) {
+	// load everything from DB into memory
+	employees, err := database.GetAllEmployees()
+	if err != nil {
+		return solver.SolverResult{}, err
+	}
+
+	avails, err := database.GetAllAvailabilities()
+	if err != nil {
+		return solver.SolverResult{}, err
+	}
+
+	daySettings, err := database.GetAllDaySettings()
+	if err != nil {
+		return solver.SolverResult{}, err
+	}
+
+	settings, err := database.GetSettings()
+	if err != nil {
+		return solver.SolverResult{}, err
+	}
+
+	// hand it all to the solver — it runs entirely in memory
+	result := solver.Run(solver.SolverInput{
+		Employees:      employees,
+		Availabilities: avails,
+		DaySettings:    daySettings,
+		Settings:       settings,
+	})
+
+	// if solved, write shifts to DB
+	if result.Solved {
+		database.DeleteShiftsBySchedule(scheduleID) // clear out any old shifts for this schedule
+		for i := range result.Shifts {
+			result.Shifts[i].ScheduleID = scheduleID
+		}
+		database.CreateShiftsBulk(result.Shifts)
+	}
+
+	return result, nil
 }
 
 func (a *App) ClearData() error {

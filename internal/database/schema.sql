@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS employee (
     name          TEXT NOT NULL,
     role          TEXT,
     desired_hours INTEGER NOT NULL,
+    max_hours     INTEGER NOT NULL,
     wage          REAL
 );
 
@@ -47,13 +48,14 @@ CREATE TABLE IF NOT EXISTS settings (
     id                      INTEGER PRIMARY KEY DEFAULT 1,
     min_shift_length        INTEGER NOT NULL DEFAULT 4, -- hours
     max_shift_length        INTEGER NOT NULL DEFAULT 8, -- hours
-    allow_outside_hours     INTEGER NOT NULL DEFAULT 0 -- boolean
+    allow_outside_hours     INTEGER NOT NULL DEFAULT 0, -- boolean
+    time_between_shifts     INTEGER NOT NULL DEFAULT 10  -- hours
 );
 
 -- Insert default settings if they don't exist
 
-INSERT OR IGNORE INTO settings (id, min_shift_length, max_shift_length, allow_outside_hours)
-VALUES (1, 4, 8, 0); -- default settings: 4-8 hour shifts, no scheduling outside of open hours
+INSERT OR IGNORE INTO settings (id, min_shift_length, max_shift_length, allow_outside_hours, time_between_shifts)
+VALUES (1, 4, 8, 0, 10); -- default settings: 4-8 hour shifts, no scheduling outside of open hours, 10 hours between shifts
 
 INSERT OR IGNORE INTO day_settings (day_of_week, open_time, close_time, employees_needed)
 VALUES

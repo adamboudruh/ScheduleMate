@@ -13,6 +13,26 @@ func GetAvailabilityByEmployee(employeeID int) ([]models.Availability, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close() // close the database connection when we're done with it
+
+	availability := []models.Availability{}
+	for rows.Next() { // loop through every row of results and convert to Availability struct
+		var a models.Availability
+		if err := rows.Scan(&a.ID, &a.EmployeeID, &a.DayOfWeek, &a.StartTime, &a.EndTime); err != nil {
+			return nil, err
+		}
+		availability = append(availability, a)
+	}
+	return availability, nil
+}
+
+func GetAllAvailabilities() ([]models.Availability, error) {
+	rows, err := DB.Query(
+		"SELECT * FROM availability",
+	)
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 
 	availability := []models.Availability{}

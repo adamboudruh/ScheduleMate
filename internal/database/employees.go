@@ -6,7 +6,7 @@ import (
 )
 
 func GetAllEmployees() ([]models.Employee, error) {
-	rows, err := DB.Query("SELECT id, name, role, desired_hours, wage FROM employee")
+	rows, err := DB.Query("SELECT id, name, role, desired_hours, wage, max_hours FROM employee")
 	if err != nil {
 		return nil, err
 	}
@@ -15,7 +15,7 @@ func GetAllEmployees() ([]models.Employee, error) {
 	employees := []models.Employee{}
 	for rows.Next() { // iter
 		var e models.Employee
-		err := rows.Scan(&e.ID, &e.Name, &e.Role, &e.DesiredHours, &e.Wage)
+		err := rows.Scan(&e.ID, &e.Name, &e.Role, &e.DesiredHours, &e.Wage, &e.MaxHours)
 		if err != nil {
 			return nil, err
 		}
@@ -34,8 +34,8 @@ func CreateEmployee(e models.Employee) (int64, error) {
 	}
 	fmt.Printf("Adding employee named %s\n", e.Name)
 	result, err := DB.Exec(
-		"INSERT INTO employee (name, role, desired_hours, wage) VALUES (?, ?, ?, ?)",
-		e.Name, e.Role, e.DesiredHours, e.Wage,
+		"INSERT INTO employee (name, role, desired_hours, wage, max_hours) VALUES (?, ?, ?, ?, ?)",
+		e.Name, e.Role, e.DesiredHours, e.Wage, e.MaxHours,
 	)
 	if err != nil {
 		return 0, err
@@ -46,8 +46,8 @@ func CreateEmployee(e models.Employee) (int64, error) {
 func UpdateEmployee(e models.Employee) error {
 	fmt.Printf("Updating employee id=%d name=%s\n", e.ID, e.Name)
 	_, err := DB.Exec(
-		"UPDATE employee SET name=?, role=?, desired_hours=?, wage=? WHERE id=?",
-		e.Name, e.Role, e.DesiredHours, e.Wage, e.ID,
+		"UPDATE employee SET name=?, role=?, desired_hours=?, wage=?, max_hours=? WHERE id=?",
+		e.Name, e.Role, e.DesiredHours, e.Wage, e.MaxHours, e.ID,
 	)
 	return err
 }

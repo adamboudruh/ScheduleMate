@@ -48,22 +48,28 @@ func GetShiftsByEmployee(employeeID int) ([]models.Shift, error) {
 	return shifts, nil
 }
 
-func CreateShift(s models.Shift) (int64, models.ValidationResult) {
-	// input validation
+func validateShift(s models.Shift) models.ValidationResult {
 	if s.ScheduleID == 0 {
-		return 0, models.ValidationResult{Errors: []string{"Schedule ID is required"}}
+		return models.ValidationResult{Errors: []string{"Schedule ID is required"}}
 	}
 	if s.EmployeeID == 0 {
-		return 0, models.ValidationResult{Errors: []string{"Employee ID is required"}}
+		return models.ValidationResult{Errors: []string{"Employee ID is required"}}
 	}
 	if s.DayOfWeek < 1 || s.DayOfWeek > 7 {
-		return 0, models.ValidationResult{Errors: []string{"Day of week must be between 1 and 7"}}
+		return models.ValidationResult{Errors: []string{"Day of week must be between 1 and 7"}}
 	}
 	if s.StartTime == "" || s.EndTime == "" {
-		return 0, models.ValidationResult{Errors: []string{"Start time and end time are required"}}
+		return models.ValidationResult{Errors: []string{"Start time and end time are required"}}
 	}
 	if s.StartTime >= s.EndTime {
-		return 0, models.ValidationResult{Errors: []string{"Start time must be before end time"}}
+		return models.ValidationResult{Errors: []string{"Start time must be before end time"}}
+	}
+	return models.ValidationResult{}
+}
+
+func CreateShift(s models.Shift) (int64, models.ValidationResult) {
+	if result := validateShift(s); len(result.Errors) > 0 {
+		return 0, result
 	}
 
 	// conflict detection
@@ -87,7 +93,44 @@ func CreateShift(s models.Shift) (int64, models.ValidationResult) {
 	return id, models.ValidationResult{}
 }
 
-func UpdateShift(s models.Shift) (models.ValidationResult) {
+func CreateShiftsBulk(shifts []models.Shift) ([]int64, models.ValidationResult) {
+	for i, s := range shifts {
+		if result := validateShift(s); len(result.Errors) > 0 {
+			return nil, models.ValidationResult{
+				Errors: append([]string{fmt.Sprintf("shift %d: ", i)}, result.Errors...),
+			}
+		}
+	}
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, models.ValidationResult{Fatal: err}
+	}
+	defer tx.Rollback()
+
+	ids := make([]int64, 0, len(shifts))
+	for _, s := range shifts {
+		res, err := tx.Exec(
+			"INSERT INTO shift (schedule_id, employee_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)",
+			s.ScheduleID, s.EmployeeID, s.DayOfWeek, s.StartTime, s.EndTime,
+		)
+		if err != nil {
+			return nil, models.ValidationResult{Fatal: err}
+		}
+		id, err := res.LastInsertId()
+		if err != nil {
+			return nil, models.ValidationResult{Fatal: err}
+		}
+		ids = append(ids, id)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, models.ValidationResult{Fatal: err}
+	}
+	return ids, models.ValidationResult{}
+}
+
+func UpdateShift(s models.Shift) models.ValidationResult {
 	// Layer 1: input validation
 	if s.ID == 0 {
 		return models.ValidationResult{Errors: []string{"ID is required"}}
@@ -130,5 +173,18 @@ func DeleteShift(id int) error {
 	if rows == 0 {
 		return fmt.Errorf("shift with id %d not found", id)
 	}
+	return nil
+}
+
+func DeleteShiftsBySchedule(scheduleID int) error {
+	result, err := DB.Exec("DELETE FROM shift WHERE schedule_id = ?", scheduleID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Deleted %d shifts for schedule id %d\n", rows, scheduleID)
 	return nil
 }
