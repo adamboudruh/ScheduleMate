@@ -26,7 +26,7 @@ func generateDomain(s slot, avails []models.Availability) []shiftOption {
 	storeOpen := timeToMinutes(ds.SchedulableOpen)
 	storeClose := timeToMinutes(ds.SchedulableClose)
 
-	// Store is closed this day — no shifts possible
+	// Store is closed this day, no shifts possible
 	if storeOpen == 0 && storeClose == 0 {
 		return nil
 	}
@@ -39,7 +39,6 @@ func generateDomain(s slot, avails []models.Availability) []shiftOption {
 		availStart := timeToMinutes(avail.StartTime)
 		availEnd := timeToMinutes(avail.EndTime)
 
-		// "00:00"–"00:00" means unavailable
 		if availStart == 0 && availEnd == 0 {
 			continue
 		}
@@ -52,6 +51,13 @@ func generateDomain(s slot, avails []models.Availability) []shiftOption {
 				domain = append(domain, shiftOption{minutesToTime(start), minutesToTime(end)})
 			}
 		}
+	}
+
+	// Append a "no shift" sentinel so the solver can choose not to schedule
+	// an employee on a day they're available. isDemandMet is the only
+	// termination condition, so unneeded slots just take the sentinel.
+	if len(domain) > 0 {
+		domain = append(domain, shiftOption{StartTime: "00:00", EndTime: "00:00"})
 	}
 	return domain
 }

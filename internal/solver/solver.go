@@ -96,7 +96,6 @@ type SolverResult struct {
 //  3. Run() stores settings in package-level cfg so they're accessible to all internal functions
 //  4. Run() returns SolverResult with an array of shifts with ScheduleID as 0
 func Run(input SolverInput) SolverResult {
-	// store config so all functions can access it
 	cfg.settings = input.Settings
 	cfg.daySettings = resolveSchedulableHours(input.DaySettings, input.Settings)
 
@@ -105,7 +104,6 @@ func Run(input SolverInput) SolverResult {
 
 	availMap := availabilityMap(input.Availabilities)
 
-	// feasibility pre-check
 	if !feasibilityCheck(input.Employees, availMap) {
 		return SolverResult{
 			Feasible: false,
@@ -115,7 +113,6 @@ func Run(input SolverInput) SolverResult {
 		}
 	}
 
-	// Build domains
 	domains := map[slot][]shiftOption{}
 	slots := []slot{}
 	for _, emp := range input.Employees {
@@ -131,13 +128,20 @@ func Run(input SolverInput) SolverResult {
 
 	fmt.Printf("Solver: %d slots, feasibility passed. Searching...\n", len(slots))
 
-	// backtracking search with timeout
 	const solveTimeout = 15 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), solveTimeout)
 	defer cancel()
 
+	// Skip isDemandMet until the schedule is large enough to possibly satisfy demand
+	minShiftsForDemand := 0
+	for _, ds := range cfg.daySettings {
+		if ds.EmployeesNeeded > 0 {
+			minShiftsForDemand += ds.EmployeesNeeded
+		}
+	}
+
 	sched := schedule{}
-	solved := backtrack(ctx, slots, domains, sched, input.Employees)
+	solved := backtrack(ctx, slots, domains, sched, input.Employees, minShiftsForDemand)
 
 	elapsed := time.Since(start)
 
@@ -145,36 +149,28 @@ func Run(input SolverInput) SolverResult {
 		timedOut := ctx.Err() != nil
 		msg := "Search exhausted all possibilities. The dataset is definitively infeasible."
 		if timedOut {
-			msg = fmt.Sprintf("Search timed out after %s. The dataset is likely infeasible in ways the pre-check didn't catch.", solveTimeout)
+			msg = fmt.Sprintf("Search timed out after %s. Likely infeasible in ways the pre-check didn't catch.", solveTimeout)
 		}
 		return SolverResult{
-			Feasible:  true,
-			Solved:    false,
-			TimedOut:  timedOut,
-			CallCount: callCount,
-			Wipeouts:  forwardWipeouts,
-			Elapsed:   elapsed,
-			Message:   msg,
+			Feasible: true, Solved: false, TimedOut: timedOut,
+			CallCount: callCount, Wipeouts: forwardWipeouts,
+			Elapsed: elapsed, Message: msg,
 		}
 	}
 
-	// score before optimization
 	initialScore := score(sched, input.Employees)
 	fmt.Printf("Solver: solution found in %s (calls=%d). Score=%.1f. Optimizing...\n",
 		elapsed, callCount, initialScore.Total)
 
-	// optimize
 	sched = optimize(sched, input.Employees, availMap, 50)
+	sched = consolidate(sched, input.Employees, availMap) // ← new
 	finalScore := score(sched, input.Employees)
 
 	fmt.Printf("Solver: optimization done. Score %.1f -> %.1f\n",
 		initialScore.Total, finalScore.Total)
 
-	// convert internal schedule to []models.Shift
-	shifts := scheduleToShifts(sched)
-
 	return SolverResult{
-		Shifts:    shifts,
+		Shifts:    scheduleToShifts(sched),
 		Score:     finalScore,
 		CallCount: callCount,
 		Wipeouts:  forwardWipeouts,
@@ -188,7 +184,7 @@ func Run(input SolverInput) SolverResult {
 // Fills in SchedulableOpen/Close from OpenTime/CloseTime when allow_outside_hours is disabled
 // This way the rest of the solver can always read SchedulableOpen/Close without caring about the setting
 func resolveSchedulableHours(daySettings map[int]models.DaySettings, settings models.Settings) map[int]models.DaySettings {
-	resolved := make(map[int]models.DaySettings, len(daySettings))
+	resolved := make(map[int]models.DaySettings, len(daySettings)) // make a map  of the new day settings to return
 	for day, ds := range daySettings {
 		if !settings.AllowOutsideHours || ds.SchedulableOpen == "" {
 			ds.SchedulableOpen = ds.OpenTime
@@ -206,6 +202,9 @@ func resolveSchedulableHours(daySettings map[int]models.DaySettings, settings mo
 func scheduleToShifts(sched schedule) []models.Shift {
 	shifts := make([]models.Shift, 0, len(sched))
 	for s, opt := range sched {
+		if opt.StartTime == "00:00" && opt.EndTime == "00:00" {
+			continue // no-shift sentinel, not a real shift
+		}
 		shifts = append(shifts, models.Shift{
 			EmployeeID: s.EmployeeID,
 			DayOfWeek:  s.DayOfWeek,

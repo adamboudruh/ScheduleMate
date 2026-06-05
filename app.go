@@ -104,3 +104,87 @@ func (a *App) GenerateSchedule(scheduleID int) (solver.SolverResult, error) {
 func (a *App) ClearData() error {
 	return database.ClearData()
 }
+
+func (a *App) GetAllAvailabilities() ([]models.Availability, error) {
+	return database.GetAllAvailabilities()
+}
+
+func (a *App) GetAvailabilityByEmployee(employeeID int) ([]models.Availability, error) {
+	return database.GetAvailabilityByEmployee(employeeID)
+}
+
+func (a *App) CreateAvailability(av models.Availability) (int64, models.ValidationResult) {
+	return database.CreateAvailability(av)
+}
+
+func (a *App) UpdateAvailability(av models.Availability) models.ValidationResult {
+	return database.UpdateAvailability(av)
+}
+
+func (a *App) DeleteAvailability(id int) error {
+	return database.DeleteAvailability(id)
+}
+
+func (a *App) GetAllSchedules() ([]models.Schedule, error) {
+	return database.GetAllSchedules()
+}
+
+func (a *App) GetScheduleByWeek(weekOf string) (models.Schedule, error) {
+	return database.GetScheduleByWeek(weekOf)
+}
+
+func (a *App) CreateSchedule(s models.Schedule) (int64, error) {
+	return database.CreateSchedule(s)
+}
+
+func (a *App) UpdateSchedule(s models.Schedule) error {
+	return database.UpdateSchedule(s)
+}
+
+func (a *App) DeleteSchedule(id int) error {
+	return database.DeleteSchedule(id)
+}
+
+func (a *App) GetShiftsBySchedule(scheduleID int) ([]models.Shift, error) {
+	return database.GetShiftsBySchedule(scheduleID)
+}
+
+func (a *App) GetShiftsByEmployee(employeeID int) ([]models.Shift, error) {
+	return database.GetShiftsByEmployee(employeeID)
+}
+
+func (a *App) CreateShift(s models.Shift) (int64, models.ValidationResult) {
+	return database.CreateShift(s)
+}
+
+func (a *App) UpdateShift(s models.Shift) models.ValidationResult {
+	return database.UpdateShift(s)
+}
+
+func (a *App) DeleteShift(id int) error {
+	return database.DeleteShift(id)
+}
+
+func (a *App) DeleteShiftsBySchedule(scheduleID int) error {
+	return database.DeleteShiftsBySchedule(scheduleID)
+}
+
+func (a *App) GetAllDaySettings() (map[int]models.DaySettings, error) {
+	return database.GetAllDaySettings()
+}
+
+func (a *App) GetDaySettings(dayOfWeek int) (models.DaySettings, error) {
+	return database.GetDaySettings(dayOfWeek)
+}
+
+func (a *App) UpdateDaySettings(ds models.DaySettings) error {
+	return database.UpdateDaySettings(ds)
+}
+
+func (a *App) GetSettings() (models.Settings, error) {
+	return database.GetSettings()
+}
+
+func (a *App) UpdateSettings(s models.Settings) error {
+	return database.UpdateSettings(s)
+}

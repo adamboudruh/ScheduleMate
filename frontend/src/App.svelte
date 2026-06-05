@@ -1,71 +1,105 @@
 <script>
-  import { GetAllEmployees, CreateEmployee, UpdateEmployee, DeleteEmployee } from '../wailsjs/go/main/App.js'
-  import { Seed, ClearData } from '../wailsjs/go/main/App.js'
-  import CreateEmployeeModal from './CreateEmployeeModal.svelte';
+  import { fly } from 'svelte/transition';
+  import EmployeesPage from './pages/EmployeesPage.svelte';
+  import AvailabilityPage from './pages/AvailabilityPage.svelte';
+  import SchedulePage from './pages/SchedulePage.svelte';
+  import SettingsPage from './pages/SettingsPage.svelte';
 
-  let employees = [];
-  let showCreateEmployeeModal = false;
-  
-  async function handleSave(event) {
-    await CreateEmployee(event.detail);
-    showCreateEmployeeModal = false;
-    loadEmployees();
-  }
+  let currentPage = 'employees';
+  let drawerOpen = false;
 
-  async function loadEmployees() {
-    employees = await GetAllEmployees();
-  }
-
-  async function seed() {
-    await Seed();
-    loadEmployees();
-  }
-
-  async function clear() {
-    await ClearData();
-    loadEmployees();
-  }
-
-  loadEmployees();
+  const navItems = [
+    { id: 'employees', label: 'Employees' },
+    { id: 'availability', label: 'Availability' },
+    { id: 'schedule', label: 'Schedule' },
+    { id: 'settings', label: 'Settings' },
+  ];
 </script>
 
-<main>
-  <h2>Employees</h2>
-  <button class="btn" on:click={seed}>Seed</button>
-  <button class="btn" on:click={clear}>Clear</button>
-  <button class="btn" on:click={() => showCreateEmployeeModal = true}>Add Employee</button>
+<button class="hamburger" on:click={() => (drawerOpen = !drawerOpen)}>☰</button>
 
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Name</th>
-        <th>Role</th>
-        <th>Desired Hours</th>
-        <th>Wage</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each employees as emp}
-        <tr>
-          <td>{emp.id}</td>
-          <td>{emp.name}</td>
-          <td>{emp.role}</td>
-          <td>{emp.desiredHours}</td>
-          <td>{emp.wage}</td>
-        </tr>
+{#if drawerOpen}
+  <div class="drawer" transition:fly={{ x: -220, duration: 200 }}>
+    <strong>ScheduleMate</strong>
+    <nav>
+      {#each navItems as item}
+        <button
+          class:active={currentPage === item.id}
+          on:click={() => { currentPage = item.id; drawerOpen = false; }}
+        >
+          {item.label}
+        </button>
       {/each}
-    </tbody>
-  </table>
-</main>
+    </nav>
+  </div>
+{/if}
 
-<CreateEmployeeModal
-  show={showCreateEmployeeModal}
-  title="Create Employee"
-  on:submit={handleSave}
-  on:close={() => showCreateEmployeeModal = false}
-/>
+{#if currentPage === 'employees'}
+  <EmployeesPage />
+{:else if currentPage === 'availability'}
+  <AvailabilityPage />
+{:else if currentPage === 'schedule'}
+  <SchedulePage />
+{:else if currentPage === 'settings'}
+  <SettingsPage />
+{/if}
 
 <style>
+  .hamburger {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 300;
+  }
 
+  .drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 200px;
+    height: 100vh;
+    background: rgba(15, 25, 40, 0.88);
+    backdrop-filter: blur(8px);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem 1rem;
+  }
+
+  nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-top: 50px;
+  }
+
+  nav button {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 1.3rem;
+    cursor: pointer;
+    text-align: left;
+    padding: 0.6rem 0.9rem;
+    border-radius: 4px;
+    margin-top: 5px;
+    margin-bottom: 30px;
+    width: 100%;
+  }
+
+  nav button:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  nav button.active {
+    color: white;
+    font-weight: bold;
+    background: rgba(255, 255, 255, 0.12);
+  }
 </style>

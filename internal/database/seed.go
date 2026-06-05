@@ -2,9 +2,16 @@ package database
 
 import (
 	"fmt"
+	"log"
 )
 
 func Seed() error {
+	fmt.Print("Seeding db...\n")
+
+	if err := ClearData(); err != nil {
+		return fmt.Errorf("clearing data: %w", err)
+	}
+
 	employees := []struct {
 		name         string
 		role         string
@@ -12,13 +19,13 @@ func Seed() error {
 		maxHours     int
 		wage         float64
 	}{
-		{"Alice", "cashier", 24, 32, 15.50},
-		{"Bob", "cashier", 16, 20, 15.50},
-		{"Charlie", "cashier", 32, 40, 16.00},
-		{"Diana", "stocker", 20, 28, 15.00},
-		{"Eve", "stocker", 32, 40, 15.00},
-		{"Frank", "stocker", 16, 24, 15.00},
+		{"Alice", "cashier", 20, 40, 15.50},
+		{"Bob", "cashier", 20, 40, 15.50},
+		{"Charlie", "stocker", 40, 40, 15.00},
+		{"Diana", "stocker", 40, 40, 15.00},
 	}
+
+	fmt.Printf("Seeding %d employees...\n", len(employees))
 
 	availabilities := []struct {
 		employeeIndex int
@@ -26,52 +33,62 @@ func Seed() error {
 		startTime     string
 		endTime       string
 	}{
-		{0, 2, "09:00", "17:00"},
-		{0, 3, "09:00", "17:00"},
-		{0, 5, "12:00", "21:00"},
+		// Alice: Mon, Tue, Wed(closed), Thu(off), Fri, Sat(off), Sun(closed)
+		{0, 2, "09:00", "21:00"},
+		{0, 3, "09:00", "21:00"},
+		{0, 5, "09:00", "21:00"},
 		{0, 6, "09:00", "21:00"},
-		{0, 7, "09:00", "17:00"},
+		{0, 7, "09:00", "21:00"},
 
-		{1, 2, "12:00", "21:00"},
-		{1, 4, "12:00", "21:00"},
-		{1, 6, "09:00", "18:00"},
-		{1, 7, "12:00", "21:00"},
+		// Bob: Mon, Tue(off), Wed(closed), Thu, Fri(off), Sat, Sun(closed)
+		{1, 2, "09:00", "21:00"},
+		{1, 3, "09:00", "21:00"},
+		{1, 5, "09:00", "21:00"},
+		{1, 6, "09:00", "21:00"},
+		{1, 7, "09:00", "21:00"},
 
+		// Charlie: Mon, Tue, Wed(closed+off), Thu, Fri, Sat, Sun(closed+off)
 		{2, 2, "09:00", "21:00"},
-		{2, 3, "13:00", "21:00"},
-		{2, 4, "09:00", "21:00"},
+		{2, 3, "09:00", "21:00"},
 		{2, 5, "09:00", "21:00"},
-		{2, 6, "13:00", "21:00"},
+		{2, 6, "09:00", "21:00"},
 		{2, 7, "09:00", "21:00"},
 
-		{3, 2, "09:00", "17:00"},
-		{3, 3, "09:00", "17:00"},
-		{3, 4, "09:00", "17:00"},
-		{3, 6, "09:00", "15:00"},
-		{3, 7, "09:00", "15:00"},
+		// Diana: Mon(off), Tue, Wed(closed), Thu, Fri, Sat, Sun(closed)
+		{3, 2, "09:00", "21:00"},
+		{3, 3, "09:00", "21:00"},
+		{3, 5, "09:00", "21:00"},
+		{3, 6, "09:00", "21:00"},
+		{3, 7, "09:00", "21:00"},
+	}
 
-		{4, 2, "09:00", "21:00"},
-		{4, 3, "09:00", "21:00"},
-		{4, 4, "09:00", "21:00"},
-		{4, 5, "09:00", "21:00"},
-		{4, 6, "09:00", "21:00"},
-		{4, 7, "09:00", "21:00"},
-
-		{5, 3, "14:00", "21:00"},
-		{5, 4, "14:00", "21:00"},
-		{5, 5, "14:00", "21:00"},
-		{5, 6, "09:00", "21:00"},
-		{5, 7, "09:00", "21:00"},
+	daySettings := map[int]struct {
+		open             string
+		close            string
+		schedulableOpen  string
+		schedulableClose string
+		needed           int
+	}{
+		1: {"00:00", "00:00", "00:00", "00:00", 0},
+		2: {"09:00", "21:00", "09:00", "21:00", 1},
+		3: {"09:00", "21:00", "09:00", "21:00", 1},
+		4: {"00:00", "00:00", "00:00", "00:00", 0},
+		5: {"09:00", "21:00", "09:00", "21:00", 1},
+		6: {"09:00", "21:00", "09:00", "21:00", 2},
+		7: {"09:00", "21:00", "09:00", "21:00", 2},
 	}
 
 	employeeIDs := make([]int64, len(employees))
 	for i, emp := range employees {
+		fmt.Printf("  Inserting employee: %s...\n", emp.name)
 		result, err := DB.Exec(
 			`INSERT INTO employee (name, role, desired_hours, max_hours, wage) VALUES (?, ?, ?, ?, ?)`,
 			emp.name, emp.role, emp.desiredHours, emp.maxHours, emp.wage,
 		)
 		if err != nil {
-			return fmt.Errorf("inserting employee %s: %w", emp.name, err)
+			err = fmt.Errorf("inserting employee %s: %w", emp.name, err)
+			log.Println("Seed error:", err)
+			return err
 		}
 		id, err := result.LastInsertId()
 		if err != nil {
@@ -90,10 +107,24 @@ func Seed() error {
 			return fmt.Errorf("inserting availability for employee_id=%d day=%d: %w", empID, avail.dayOfWeek, err)
 		}
 	}
+
+	for day, ds := range daySettings {
+		if _, err := DB.Exec(`
+			UPDATE day_settings
+			SET open_time=?, close_time=?, schedulable_open=?, schedulable_close=?, employees_needed=?
+			WHERE day_of_week=?`,
+			ds.open, ds.close, ds.schedulableOpen, ds.schedulableClose, ds.needed, day,
+		); err != nil {
+			return fmt.Errorf("updating day_settings for day %d: %w", day, err)
+		}
+	}
 	return nil
 }
 
 func ClearData() error {
+	if _, err := DB.Exec("DELETE FROM schedule"); err != nil {
+		return err
+	}
 	_, err := DB.Exec("DELETE FROM employee")
 	return err
 }

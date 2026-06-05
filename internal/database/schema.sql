@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS employee (
 CREATE TABLE IF NOT EXISTS availability (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER NOT NULL,
-    day_of_week INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL,  -- 1=Sunday, 7=Saturday
     start_time  TEXT NOT NULL,
     end_time    TEXT NOT NULL,
     FOREIGN KEY (employee_id) REFERENCES employee(id) ON DELETE CASCADE

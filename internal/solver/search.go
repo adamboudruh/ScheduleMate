@@ -86,13 +86,13 @@ func isConsistent(s slot, shift shiftOption, sched schedule, employees []models.
 	}
 	candidateMinutes := timeToMinutes(shift.EndTime) - timeToMinutes(shift.StartTime)
 	for _, emp := range employees {
-		if emp.ID == s.EmployeeID && totalMinutes+candidateMinutes > emp.MaxHours*60 {
+		if emp.ID == s.EmployeeID && totalMinutes+candidateMinutes > int(emp.MaxHours)*60 {
 			consistencyFails++
 			return false
 		}
 	}
 
-	// Check 2: staffing cap
+	// Check 2: staffing cap (allow EmployeesNeeded+1 for handoffs)
 	ds := cfg.daySettings[s.DayOfWeek]
 	shiftStart := timeToMinutes(shift.StartTime)
 	shiftEnd := timeToMinutes(shift.EndTime)
@@ -115,8 +115,9 @@ func isConsistent(s slot, shift shiftOption, sched schedule, employees []models.
 
 // canStillCoverDemand checks whether every uncovered demand window can still
 // potentially be covered by at least one remaining domain option.
-func canStillCoverDemand(domains map[slot][]shiftOption, sched schedule) bool {
-	for day, ds := range cfg.daySettings {
+func canStillCoverDemand(domains map[slot][]shiftOption, sched schedule, affectedDays map[int]bool) bool {
+	for day := range affectedDays {
+		ds := cfg.daySettings[day]
 		if ds.EmployeesNeeded == 0 {
 			continue
 		}
@@ -177,6 +178,9 @@ func forwardCheck(
 	pruned := map[slot][]shiftOption{}
 	ds := cfg.daySettings[s.DayOfWeek]
 
+	// Track which days had domains modified — only these need demand rechecking
+	affectedDays := map[int]bool{s.DayOfWeek: true}
+
 	// Rule 1: prune overstaffing options on the same day
 	for otherSlot, domain := range domains {
 		if otherSlot.DayOfWeek != s.DayOfWeek {
@@ -232,7 +236,7 @@ func forwardCheck(
 	var maxHours int
 	for _, emp := range employees {
 		if emp.ID == s.EmployeeID {
-			maxHours = emp.MaxHours
+			maxHours = int(emp.MaxHours)
 			break
 		}
 	}
@@ -257,6 +261,7 @@ func forwardCheck(
 
 		if len(remaining) < len(options) {
 			domains[otherSlot] = remaining
+			affectedDays[otherSlot.DayOfWeek] = true
 		}
 		if len(domains[otherSlot]) == 0 {
 			forwardWipeouts++
@@ -265,8 +270,8 @@ func forwardCheck(
 		}
 	}
 
-	// Rule 3: demand reachability
-	if !canStillCoverDemand(domains, sched) {
+	// Rule 3: check demand reachability on affected days only
+	if !canStillCoverDemand(domains, sched, affectedDays) {
 		forwardWipeouts++
 		restorePruned(domains, pruned)
 		return nil
@@ -322,7 +327,7 @@ func lcv(s slot, domains map[slot][]shiftOption, sched schedule, employees []mod
 }
 
 // backtrack is the core recursive CSP solver.
-func backtrack(ctx context.Context, slots []slot, domains map[slot][]shiftOption, sched schedule, employees []models.Employee) bool {
+func backtrack(ctx context.Context, slots []slot, domains map[slot][]shiftOption, sched schedule, employees []models.Employee, minShiftsForDemand int) bool {
 	callCount++
 	if callCount%10000 == 0 {
 		if ctx.Err() != nil {
@@ -332,7 +337,7 @@ func backtrack(ctx context.Context, slots []slot, domains map[slot][]shiftOption
 			callCount, consistencyFails, forwardWipeouts, len(sched))
 	}
 
-	if isDemandMet(sched) {
+	if len(sched) >= minShiftsForDemand && isDemandMet(sched) {
 		return true
 	}
 
@@ -341,9 +346,10 @@ func backtrack(ctx context.Context, slots []slot, domains map[slot][]shiftOption
 		return false
 	}
 
-	orderedDomain := lcv(s, domains, sched, employees)
+	domainSnapshot := make([]shiftOption, len(domains[s]))
+	copy(domainSnapshot, domains[s])
 
-	for _, shift := range orderedDomain {
+	for _, shift := range domainSnapshot {
 		if !isConsistent(s, shift, sched, employees) {
 			continue
 		}
@@ -351,7 +357,7 @@ func backtrack(ctx context.Context, slots []slot, domains map[slot][]shiftOption
 
 		pruned := forwardCheck(domains, sched, s, shift, employees)
 		if pruned != nil {
-			if backtrack(ctx, slots, domains, sched, employees) {
+			if backtrack(ctx, slots, domains, sched, employees, minShiftsForDemand) {
 				return true
 			}
 			restorePruned(domains, pruned)

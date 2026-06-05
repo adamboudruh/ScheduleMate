@@ -13,7 +13,7 @@ import (
 // Check 3: per-day person-hour supply vs demand (capped at MaxShiftLength per employee)
 
 func feasibilityCheck(employees []models.Employee, availMap map[slot][]models.Availability) bool {
-	// Pre-compute each employee's domain once — used by all checks
+	// Pre-compute each employee's domain once, used by all checks
 	allDomains := map[int]map[int][]shiftOption{}
 	for _, emp := range employees {
 		allDomains[emp.ID] = map[int][]shiftOption{}

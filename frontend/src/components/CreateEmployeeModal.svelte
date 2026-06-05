@@ -7,6 +7,7 @@
     let name = '';
     let role = '';
     let desiredHours = 0;
+    let maxHours = 0;
     let wage = 0;
 
     function showModal(node) {
@@ -15,8 +16,8 @@
     }
 
     const submit = () => {
-        dispatch('submit', { name, role, desiredHours, wage });
-        name = ""; role = ""; desiredHours = 0; wage = 0;
+        dispatch('submit', { name, role, desiredHours, maxHours, wage });
+        name = ""; role = ""; desiredHours = 0; maxHours = 0; wage = 0;
         cancel();
     }
 
@@ -26,6 +27,7 @@
         name = '';
         role = '';
         desiredHours = 0;
+        maxHours = 0;
         wage = 0;
     }
 
@@ -45,6 +47,9 @@
 
             <label>Desired Hours</label>
             <input bind:value={desiredHours} type="number" min="1" max="40" />
+
+            <label>Max Hours</label>
+            <input bind:value={maxHours} type="number" min="1" max="40" />
 
             <label>Wage</label>
             <input bind:value={wage} type="number" min="0" step="0.01" />

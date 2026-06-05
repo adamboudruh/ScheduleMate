@@ -18,9 +18,10 @@ import (
 //     did, it keeps the change and continues optimizing.
 
 const ( // clopen is the most important soft constraint to optimize for, then fairness, then hours gap
-	weightHoursGap = 1.0
-	weightFairness = 2.0
-	weightClopen   = 3.0
+	weightHoursGap  = 1.0
+	weightFairness  = 3.0
+	weightClopen    = 2.0
+	weightOverstaff = 4.0
 )
 
 // employeeWeeklyMinutes returns a map of employeeID -> total scheduled minutes
@@ -40,8 +41,8 @@ func score(sched schedule, employees []models.Employee) ScoreResult {
 	gaps := map[int]float64{}
 	for _, emp := range employees {
 		actual := float64(totals[emp.ID]) / 60.0
-		desired := float64(emp.DesiredHours)
-		gap := math.Abs(actual - desired)
+		desired := emp.DesiredHours
+		gap := math.Abs(actual - (float64)(desired))
 		hoursGap += gap
 		gaps[emp.ID] = gap
 	}
@@ -80,7 +81,30 @@ func score(sched schedule, employees []models.Employee) ScoreResult {
 		}
 	}
 
-	total := weightHoursGap*hoursGap + weightFairness*fairness + weightClopen*clopenPenalty
+	// Overstaffing penalty: sum of excess coverage across all time windows
+	overstaffPenalty := 0.0
+	for day, ds := range cfg.daySettings {
+		if ds.EmployeesNeeded == 0 {
+			continue
+		}
+		storeOpen := timeToMinutes(ds.SchedulableOpen)
+		storeClose := timeToMinutes(ds.SchedulableClose)
+		for t := storeOpen; t < storeClose; t += stepMinutes {
+			coveredBy := 0
+			for s, shift := range sched {
+				if s.DayOfWeek == day &&
+					timeToMinutes(shift.StartTime) <= t &&
+					timeToMinutes(shift.EndTime) >= t+stepMinutes {
+					coveredBy++
+				}
+			}
+			if coveredBy > ds.EmployeesNeeded {
+				overstaffPenalty += float64(coveredBy - ds.EmployeesNeeded)
+			}
+		}
+	}
+
+	total := weightHoursGap*hoursGap + weightFairness*fairness + weightClopen*clopenPenalty + weightOverstaff*overstaffPenalty
 
 	return ScoreResult{
 		HoursGap:      hoursGap,
@@ -130,30 +154,8 @@ func isValidSchedule(sched schedule, employees []models.Employee, availMap map[s
 	// No employee exceeds max hours
 	totals := employeeWeeklyMinutes(sched)
 	for _, emp := range employees {
-		if totals[emp.ID] > emp.MaxHours*60 {
+		if totals[emp.ID] > int(emp.MaxHours)*60 {
 			return false
-		}
-	}
-
-	// No overstaffing
-	for day, ds := range cfg.daySettings {
-		if ds.EmployeesNeeded == 0 {
-			continue
-		}
-		storeOpen := timeToMinutes(ds.SchedulableOpen)
-		storeClose := timeToMinutes(ds.SchedulableClose)
-		for t := storeOpen; t < storeClose; t += stepMinutes {
-			coveredBy := 0
-			for s, shift := range sched {
-				if s.DayOfWeek == day &&
-					timeToMinutes(shift.StartTime) <= t &&
-					timeToMinutes(shift.EndTime) >= t+stepMinutes {
-					coveredBy++
-				}
-			}
-			if coveredBy > ds.EmployeesNeeded+1 {
-				return false
-			}
 		}
 	}
 
@@ -169,17 +171,17 @@ func optimize(sched schedule, employees []models.Employee, availMap map[slot][]m
 	for iter := 0; iter < maxIterations; iter++ {
 		improved := false
 
-		// Move 1: Adjust shift length (extend or shrink by stepMinutes at start or end)
+		// --- Move 1: Adjust shift length (extend or shrink by stepMinutes at either end) ---
 		for s, shift := range sched {
 			original := shift
 			shiftStart := timeToMinutes(shift.StartTime)
 			shiftEnd := timeToMinutes(shift.EndTime)
 
 			candidates := []shiftOption{
-				{minutesToTime(shiftStart - stepMinutes), shift.EndTime}, // extend start earlier
-				{minutesToTime(shiftStart + stepMinutes), shift.EndTime}, // shrink start later
-				{shift.StartTime, minutesToTime(shiftEnd + stepMinutes)}, // extend end later
-				{shift.StartTime, minutesToTime(shiftEnd - stepMinutes)}, // shrink end earlier
+				{minutesToTime(shiftStart - stepMinutes), shift.EndTime},
+				{minutesToTime(shiftStart + stepMinutes), shift.EndTime},
+				{shift.StartTime, minutesToTime(shiftEnd + stepMinutes)},
+				{shift.StartTime, minutesToTime(shiftEnd - stepMinutes)},
 			}
 
 			for _, candidate := range candidates {
@@ -202,7 +204,7 @@ func optimize(sched schedule, employees []models.Employee, availMap map[slot][]m
 			}
 		}
 
-		// Move 2: Swap shifts between two employees on the same day
+		// --- Move 2: Swap shifts between two employees on the same day ---
 		for slot1, shift1 := range sched {
 			for slot2, shift2 := range sched {
 				if slot1.DayOfWeek != slot2.DayOfWeek {
@@ -232,7 +234,8 @@ func optimize(sched schedule, employees []models.Employee, availMap map[slot][]m
 			}
 		}
 
-		// Move 3: Slide shift earlier or later (same length, shifted by stepMinutes)
+		// --- Move 3: Slide shift earlier or later (same length) ---
+		// Runs before remove/add so overlapping shifts get repositioned rather than cut.
 		for s, shift := range sched {
 			original := shift
 			shiftStart := timeToMinutes(shift.StartTime)
@@ -268,11 +271,180 @@ func optimize(sched schedule, employees []models.Employee, availMap map[slot][]m
 			}
 		}
 
+		// --- Move 4: Remove a shift entirely ---
+		// No desired-hours guard — the score decides. Move 5 can add hours back
+		// in a better position, making remove+add a relocation rather than a cut.
+		for slotToRemove, shiftToRemove := range sched {
+			delete(sched, slotToRemove)
+			if isDemandMet(sched) {
+				newScore := score(sched, employees)
+				if newScore.Total < bestScore.Total {
+					movesKept++
+					fmt.Printf("  [OPT #%d] remove emp=%d day=%d: %s-%s (score %.1f -> %.1f)\n",
+						movesKept, slotToRemove.EmployeeID, slotToRemove.DayOfWeek,
+						shiftToRemove.StartTime, shiftToRemove.EndTime,
+						bestScore.Total, newScore.Total)
+					bestScore = newScore
+					improved = true
+					break
+				}
+			}
+			sched[slotToRemove] = shiftToRemove
+		}
+
+		// --- Move 5: Add a shift for an under-scheduled employee ---
+		// Makes the optimizer bidirectional — combined with Move 4, hours can be
+		// relocated (removed from a bad position, added in a good one).
+		totals := employeeWeeklyMinutes(sched)
+	addLoop:
+		for _, emp := range employees {
+			if float64(totals[emp.ID])/60.0 >= (float64)(emp.DesiredHours) {
+				continue
+			}
+			for day := 1; day <= 7; day++ {
+				addSlot := slot{EmployeeID: emp.ID, DayOfWeek: day}
+				if _, assigned := sched[addSlot]; assigned {
+					continue
+				}
+				for _, opt := range generateDomain(addSlot, availMap[addSlot]) {
+					sched[addSlot] = opt
+					if isValidSchedule(sched, employees, availMap) {
+						newScore := score(sched, employees)
+						if newScore.Total < bestScore.Total {
+							movesKept++
+							fmt.Printf("  [OPT #%d] add emp=%d day=%d: %s-%s (score %.1f -> %.1f)\n",
+								movesKept, emp.ID, day,
+								opt.StartTime, opt.EndTime,
+								bestScore.Total, newScore.Total)
+							bestScore = newScore
+							improved = true
+							break addLoop
+						}
+					}
+					delete(sched, addSlot)
+				}
+			}
+		}
+
 		if !improved {
 			fmt.Printf("  Local optimum reached after %d iterations, %d moves kept.\n", iter+1, movesKept)
 			break
 		}
 	}
 
+	return sched
+}
+
+// Consolidate is a post-optimization step that merges fragmented shift pairs into longer single
+// shifts provided they don't violdate any constrictions. Runs until no more consolidations are possible.
+func consolidate(sched schedule, employees []models.Employee, availMap map[slot][]models.Availability) schedule {
+	for {
+		consolidated := false
+
+		for _, emp1 := range employees {
+			for _, emp2 := range employees {
+				if emp1.ID >= emp2.ID {
+					continue
+				}
+
+				type sharedDay struct {
+					day         int
+					shift1      shiftOption
+					shift2      shiftOption
+					mergedStart string
+					mergedEnd   string
+				}
+				var sharedDays []sharedDay
+
+				for day := 1; day <= 7; day++ {
+					s1 := slot{EmployeeID: emp1.ID, DayOfWeek: day}
+					s2 := slot{EmployeeID: emp2.ID, DayOfWeek: day}
+					shift1, ok1 := sched[s1]
+					shift2, ok2 := sched[s2]
+					if !ok1 || !ok2 {
+						continue
+					}
+
+					len1 := timeToMinutes(shift1.EndTime) - timeToMinutes(shift1.StartTime)
+					len2 := timeToMinutes(shift2.EndTime) - timeToMinutes(shift2.StartTime)
+					if len1 != 4*60 || len2 != 4*60 {
+						continue
+					}
+
+					// Shifts must tile: one ends exactly where the other begins.
+					if shift1.EndTime != shift2.StartTime && shift2.EndTime != shift1.StartTime {
+						continue
+					}
+
+					mergedStart := shift1.StartTime
+					if timeToMinutes(shift2.StartTime) < timeToMinutes(shift1.StartTime) {
+						mergedStart = shift2.StartTime
+					}
+					mergedEnd := shift1.EndTime
+					if timeToMinutes(shift2.EndTime) > timeToMinutes(shift1.EndTime) {
+						mergedEnd = shift2.EndTime
+					}
+
+					sharedDays = append(sharedDays, sharedDay{day, shift1, shift2, mergedStart, mergedEnd})
+				}
+
+				if len(sharedDays) < 2 {
+					continue
+				}
+
+				for di := 0; di < len(sharedDays); di++ {
+					for dj := di + 1; dj < len(sharedDays); dj++ {
+						dayA, dayB := sharedDays[di], sharedDays[dj]
+						slotE1A := slot{EmployeeID: emp1.ID, DayOfWeek: dayA.day}
+						slotE2A := slot{EmployeeID: emp2.ID, DayOfWeek: dayA.day}
+						slotE1B := slot{EmployeeID: emp1.ID, DayOfWeek: dayB.day}
+						slotE2B := slot{EmployeeID: emp2.ID, DayOfWeek: dayB.day}
+						mergedA := shiftOption{dayA.mergedStart, dayA.mergedEnd}
+						mergedB := shiftOption{dayB.mergedStart, dayB.mergedEnd}
+
+						for _, opt := range []struct{ e1Day, e2Day int }{
+							{dayA.day, dayB.day},
+							{dayB.day, dayA.day},
+						} {
+							var e1Merged, e2Merged shiftOption
+							var e1Keep, e1Remove, e2Keep, e2Remove slot
+							if opt.e1Day == dayA.day {
+								e1Merged, e2Merged = mergedA, mergedB
+								e1Keep, e1Remove = slotE1A, slotE1B
+								e2Keep, e2Remove = slotE2B, slotE2A
+							} else {
+								e1Merged, e2Merged = mergedB, mergedA
+								e1Keep, e1Remove = slotE1B, slotE1A
+								e2Keep, e2Remove = slotE2A, slotE2B
+							}
+
+							sched[e1Keep] = e1Merged
+							delete(sched, e1Remove)
+							sched[e2Keep] = e2Merged
+							delete(sched, e2Remove)
+
+							if isValidSchedule(sched, employees, availMap) {
+								fmt.Printf("  [CONSOLIDATE] emp%d→day%d emp%d→day%d\n",
+									emp1.ID, opt.e1Day, emp2.ID, opt.e2Day)
+								consolidated = true
+								goto nextConsolidation
+							}
+
+							// Revert
+							sched[slotE1A] = dayA.shift1
+							sched[slotE1B] = dayB.shift1
+							sched[slotE2A] = dayA.shift2
+							sched[slotE2B] = dayB.shift2
+						}
+					}
+				}
+			}
+		}
+
+	nextConsolidation:
+		if !consolidated {
+			break
+		}
+	}
 	return sched
 }

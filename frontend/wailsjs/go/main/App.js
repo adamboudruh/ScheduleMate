@@ -10,16 +10,84 @@ export function ClearData() {
   return window['go']['main']['App']['ClearData']();
 }
 
+export function CreateAvailability(arg1) {
+  return window['go']['main']['App']['CreateAvailability'](arg1);
+}
+
 export function CreateEmployee(arg1) {
   return window['go']['main']['App']['CreateEmployee'](arg1);
+}
+
+export function CreateSchedule(arg1) {
+  return window['go']['main']['App']['CreateSchedule'](arg1);
+}
+
+export function CreateShift(arg1) {
+  return window['go']['main']['App']['CreateShift'](arg1);
+}
+
+export function DeleteAvailability(arg1) {
+  return window['go']['main']['App']['DeleteAvailability'](arg1);
 }
 
 export function DeleteEmployee(arg1) {
   return window['go']['main']['App']['DeleteEmployee'](arg1);
 }
 
+export function DeleteSchedule(arg1) {
+  return window['go']['main']['App']['DeleteSchedule'](arg1);
+}
+
+export function DeleteShift(arg1) {
+  return window['go']['main']['App']['DeleteShift'](arg1);
+}
+
+export function DeleteShiftsBySchedule(arg1) {
+  return window['go']['main']['App']['DeleteShiftsBySchedule'](arg1);
+}
+
+export function GenerateSchedule(arg1) {
+  return window['go']['main']['App']['GenerateSchedule'](arg1);
+}
+
+export function GetAllAvailabilities() {
+  return window['go']['main']['App']['GetAllAvailabilities']();
+}
+
+export function GetAllDaySettings() {
+  return window['go']['main']['App']['GetAllDaySettings']();
+}
+
 export function GetAllEmployees() {
   return window['go']['main']['App']['GetAllEmployees']();
+}
+
+export function GetAllSchedules() {
+  return window['go']['main']['App']['GetAllSchedules']();
+}
+
+export function GetAvailabilityByEmployee(arg1) {
+  return window['go']['main']['App']['GetAvailabilityByEmployee'](arg1);
+}
+
+export function GetDaySettings(arg1) {
+  return window['go']['main']['App']['GetDaySettings'](arg1);
+}
+
+export function GetScheduleByWeek(arg1) {
+  return window['go']['main']['App']['GetScheduleByWeek'](arg1);
+}
+
+export function GetSettings() {
+  return window['go']['main']['App']['GetSettings']();
+}
+
+export function GetShiftsByEmployee(arg1) {
+  return window['go']['main']['App']['GetShiftsByEmployee'](arg1);
+}
+
+export function GetShiftsBySchedule(arg1) {
+  return window['go']['main']['App']['GetShiftsBySchedule'](arg1);
 }
 
 export function Greet(arg1) {
@@ -30,6 +98,26 @@ export function Seed() {
   return window['go']['main']['App']['Seed']();
 }
 
+export function UpdateAvailability(arg1) {
+  return window['go']['main']['App']['UpdateAvailability'](arg1);
+}
+
+export function UpdateDaySettings(arg1) {
+  return window['go']['main']['App']['UpdateDaySettings'](arg1);
+}
+
 export function UpdateEmployee(arg1) {
   return window['go']['main']['App']['UpdateEmployee'](arg1);
+}
+
+export function UpdateSchedule(arg1) {
+  return window['go']['main']['App']['UpdateSchedule'](arg1);
+}
+
+export function UpdateSettings(arg1) {
+  return window['go']['main']['App']['UpdateSettings'](arg1);
+}
+
+export function UpdateShift(arg1) {
+  return window['go']['main']['App']['UpdateShift'](arg1);
 }
