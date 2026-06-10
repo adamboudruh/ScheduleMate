@@ -20,7 +20,7 @@ import (
 
 const ( // clopen is the most important soft constraint to optimize for, then fairness, then hours gap
 	weightHoursGap  = 1.0
-	weightFairness  = 3.0
+	weightFairness  = 4.0
 	weightClopen    = 2.0
 	weightOverstaff = 4.0
 )
@@ -209,14 +209,24 @@ func optimize(ctx context.Context, sched schedule, employees []models.Employee, 
 		}
 
 		// --- Move 2: Swap shifts between two employees on the same day ---
-		for slot1, shift1 := range sched {
-			for slot2, shift2 := range sched {
+		// Read shifts from sched right before each attempt so accepted swaps don't
+		// leave stale range values in later attempts.
+	move2SwapLoop:
+		for slot1 := range sched {
+			for slot2 := range sched {
 				if slot1.DayOfWeek != slot2.DayOfWeek {
 					continue
 				}
 				if slot1.EmployeeID >= slot2.EmployeeID {
 					continue
 				}
+
+				shift1, ok1 := sched[slot1]
+				shift2, ok2 := sched[slot2]
+				if !ok1 || !ok2 {
+					continue
+				}
+
 				sched[slot1] = shift2
 				sched[slot2] = shift1
 				if isValidSchedule(sched, employees, availMap) {
@@ -230,9 +240,10 @@ func optimize(ctx context.Context, sched schedule, employees []models.Employee, 
 							bestScore.Total, newScore.Total)
 						bestScore = newScore
 						improved = true
-						continue
+						break move2SwapLoop
 					}
 				}
+
 				sched[slot1] = shift1
 				sched[slot2] = shift2
 			}
