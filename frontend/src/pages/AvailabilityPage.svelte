@@ -123,7 +123,7 @@
   </div>
 
   <!-- Legend -->
-  <!-- <div class="legend" in:fade>
+  <div class="legend" in:fade>
     {#if selectedEmployee}
       <span class="legend-item"><span class="swatch avail"></span> Available</span>
       <span class="legend-item"><span class="swatch unavail"></span> Unavailable</span>
@@ -136,7 +136,7 @@
       </span>
       <span class="legend-label">More available</span>
     {/if}
-  </div> -->
+  </div>
 
   <!-- Grid -->
   {#if settings}
