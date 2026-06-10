@@ -95,7 +95,11 @@ type SolverResult struct {
 //  2. app.go passes all of that into solver.Run() through SolverInput
 //  3. Run() stores settings in package-level cfg so they're accessible to all internal functions
 //  4. Run() returns SolverResult with an array of shifts with ScheduleID as 0
-func Run(input SolverInput) SolverResult {
+//
+// The passed ctx lets the caller (app.go) cancel a run in flight — e.g. the
+// frontend hitting its own timeout. A backstop timeout is layered on top so a
+// run can never hang forever even if the caller never cancels.
+func Run(ctx context.Context, input SolverInput) SolverResult {
 	cfg.settings = input.Settings
 	cfg.daySettings = resolveSchedulableHours(input.DaySettings, input.Settings)
 
@@ -128,8 +132,10 @@ func Run(input SolverInput) SolverResult {
 
 	fmt.Printf("Solver: %d slots, feasibility passed. Searching...\n", len(slots))
 
-	const solveTimeout = 15 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), solveTimeout)
+	// Backstop timeout layered on the caller's ctx: either the frontend cancels
+	// (via app.go) or this fires, whichever comes first. Frontend cancels ~15s.
+	const solveTimeout = 30 * time.Second
+	ctx, cancel := context.WithTimeout(ctx, solveTimeout)
 	defer cancel()
 
 	// Skip isDemandMet until the schedule is large enough to possibly satisfy demand
@@ -162,8 +168,8 @@ func Run(input SolverInput) SolverResult {
 	fmt.Printf("Solver: solution found in %s (calls=%d). Score=%.1f. Optimizing...\n",
 		elapsed, callCount, initialScore.Total)
 
-	sched = optimize(sched, input.Employees, availMap, 50)
-	sched = consolidate(sched, input.Employees, availMap) // ← new
+	sched = optimize(ctx, sched, input.Employees, availMap, 50)
+	sched = consolidate(ctx, sched, input.Employees, availMap) // ← new
 	finalScore := score(sched, input.Employees)
 
 	fmt.Printf("Solver: optimization done. Score %.1f -> %.1f\n",

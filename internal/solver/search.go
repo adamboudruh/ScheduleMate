@@ -328,11 +328,16 @@ func lcv(s slot, domains map[slot][]shiftOption, sched schedule, employees []mod
 
 // backtrack is the core recursive CSP solver.
 func backtrack(ctx context.Context, slots []slot, domains map[slot][]shiftOption, sched schedule, employees []models.Employee, minShiftsForDemand int) bool {
+	// Cancellation check on every call. Critical: a cancelled context must make
+	// the WHOLE search unwind, not just fail one branch. We return false here
+	// AND re-check inside the value loop below so each level bails immediately
+	// instead of moving on to the next candidate value.
+	if ctx.Err() != nil {
+		return false
+	}
+
 	callCount++
 	if callCount%10000 == 0 {
-		if ctx.Err() != nil {
-			return false // timeout
-		}
 		fmt.Printf("[DEBUG] calls=%d  fails=%d  wipeouts=%d  schedule_size=%d\n",
 			callCount, consistencyFails, forwardWipeouts, len(sched))
 	}
@@ -350,6 +355,10 @@ func backtrack(ctx context.Context, slots []slot, domains map[slot][]shiftOption
 	copy(domainSnapshot, domains[s])
 
 	for _, shift := range domainSnapshot {
+		// Hard stop on cancellation: don't keep trying other values.
+		if ctx.Err() != nil {
+			return false
+		}
 		if !isConsistent(s, shift, sched, employees) {
 			continue
 		}

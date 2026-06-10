@@ -5,6 +5,8 @@ import {solver} from '../models';
 
 export function Addition(arg1:number,arg2:number):Promise<number>;
 
+export function CancelGeneration():Promise<void>;
+
 export function ClearData():Promise<void>;
 
 export function CreateAvailability(arg1:models.Availability):Promise<number|models.ValidationResult>;

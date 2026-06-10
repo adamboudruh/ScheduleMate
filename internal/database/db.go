@@ -24,6 +24,12 @@ func InitDB(path string) error {
 		return err
 	}
 
+	// SQLite is a single local file; using one connection guarantees the
+	// foreign_keys pragma below actually applies to every query (a pooled
+	// connection could otherwise run with FK enforcement off, breaking
+	// ON DELETE CASCADE). Single-connection is fine for a desktop app.
+	DB.SetMaxOpenConns(1)
+
 	// for dev, just put db in current directory, but for prod it should be in user config dir
 	// dataDir, err := os.UserConfigDir()
 	// if err != nil {

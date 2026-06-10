@@ -1,6 +1,7 @@
 package solver
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"schedulemate/internal/models"
@@ -164,11 +165,14 @@ func isValidSchedule(sched schedule, employees []models.Employee, availMap map[s
 
 // optimize runs local search on a valid schedule to improve its soft score.
 // Three move types: adjust shift length, swap shifts, slide shifts.
-func optimize(sched schedule, employees []models.Employee, availMap map[slot][]models.Availability, maxIterations int) schedule {
+func optimize(ctx context.Context, sched schedule, employees []models.Employee, availMap map[slot][]models.Availability, maxIterations int) schedule {
 	bestScore := score(sched, employees)
 	movesKept := 0
 
 	for iter := 0; iter < maxIterations; iter++ {
+		if ctx.Err() != nil {
+			break // cancelled — keep the best schedule found so far
+		}
 		improved := false
 
 		// --- Move 1: Adjust shift length (extend or shrink by stepMinutes at either end) ---
@@ -337,8 +341,11 @@ func optimize(sched schedule, employees []models.Employee, availMap map[slot][]m
 
 // Consolidate is a post-optimization step that merges fragmented shift pairs into longer single
 // shifts provided they don't violdate any constrictions. Runs until no more consolidations are possible.
-func consolidate(sched schedule, employees []models.Employee, availMap map[slot][]models.Availability) schedule {
+func consolidate(ctx context.Context, sched schedule, employees []models.Employee, availMap map[slot][]models.Availability) schedule {
 	for {
+		if ctx.Err() != nil {
+			break // cancelled — also guards against the loop never converging
+		}
 		consolidated := false
 
 		for _, emp1 := range employees {

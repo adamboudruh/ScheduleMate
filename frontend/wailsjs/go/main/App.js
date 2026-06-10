@@ -6,6 +6,10 @@ export function Addition(arg1, arg2) {
   return window['go']['main']['App']['Addition'](arg1, arg2);
 }
 
+export function CancelGeneration() {
+  return window['go']['main']['App']['CancelGeneration']();
+}
+
 export function ClearData() {
   return window['go']['main']['App']['ClearData']();
 }

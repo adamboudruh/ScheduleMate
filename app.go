@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"schedulemate/internal/database"
 	"schedulemate/internal/models"
@@ -12,6 +13,11 @@ import (
 // App struct
 type App struct {
 	ctx context.Context
+
+	// Guards the cancel func for an in-flight schedule generation so the
+	// frontend can interrupt a run (see GenerateSchedule / CancelGeneration).
+	genMu     sync.Mutex
+	genCancel context.CancelFunc
 }
 
 // NewApp creates a new App application struct
@@ -81,24 +87,59 @@ func (a *App) GenerateSchedule(scheduleID int) (solver.SolverResult, error) {
 		return solver.SolverResult{}, err
 	}
 
+	// Cancellable context so the frontend can stop a run via CancelGeneration().
+	genCtx, cancel := context.WithCancel(context.Background())
+	a.genMu.Lock()
+	if a.genCancel != nil {
+		a.genCancel() // cancel any previous run still in flight
+	}
+	a.genCancel = cancel
+	a.genMu.Unlock()
+	defer func() {
+		a.genMu.Lock()
+		a.genCancel = nil
+		a.genMu.Unlock()
+		cancel()
+	}()
+
 	// hand it all to the solver — it runs entirely in memory
-	result := solver.Run(solver.SolverInput{
+	result := solver.Run(genCtx, solver.SolverInput{
 		Employees:      employees,
 		Availabilities: avails,
 		DaySettings:    daySettings,
 		Settings:       settings,
 	})
 
-	// if solved, write shifts to DB
+	// if solved, definitively clear ALL existing shifts for this week, then
+	// write the new ones. Errors are surfaced rather than silently swallowed so
+	// a stale/partial schedule can't be left behind.
 	if result.Solved {
-		database.DeleteShiftsBySchedule(scheduleID) // clear out any old shifts for this schedule
+		if err := database.DeleteShiftsBySchedule(scheduleID); err != nil {
+			return result, fmt.Errorf("clearing existing shifts: %w", err)
+		}
 		for i := range result.Shifts {
 			result.Shifts[i].ScheduleID = scheduleID
 		}
-		database.CreateShiftsBulk(result.Shifts)
+		if _, vr := database.CreateShiftsBulk(result.Shifts); vr.Fatal != nil {
+			return result, fmt.Errorf("writing shifts: %w", vr.Fatal)
+		} else if len(vr.Errors) > 0 {
+			return result, fmt.Errorf("writing shifts: %v", vr.Errors)
+		}
 	}
 
 	return result, nil
+}
+
+// CancelGeneration interrupts an in-flight GenerateSchedule run, if any. Safe
+// to call from the frontend (e.g. on a client-side timeout) even when no run is
+// active — it's a no-op in that case.
+func (a *App) CancelGeneration() {
+	a.genMu.Lock()
+	c := a.genCancel
+	a.genMu.Unlock()
+	if c != nil {
+		c()
+	}
 }
 
 func (a *App) ClearData() error {

@@ -53,6 +53,13 @@ func UpdateEmployee(e models.Employee) error {
 }
 
 func DeleteEmployee(id int) error {
+	if _, err := DB.Exec("DELETE FROM shift WHERE employee_id=?", id); err != nil {
+		return fmt.Errorf("deleting employee's shifts: %w", err)
+	}
+	if _, err := DB.Exec("DELETE FROM availability WHERE employee_id=?", id); err != nil {
+		return fmt.Errorf("deleting employee's availability: %w", err)
+	}
+
 	result, err := DB.Exec("DELETE FROM employee WHERE id=?", id)
 	if err != nil {
 		return err
