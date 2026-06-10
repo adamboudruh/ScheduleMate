@@ -20,7 +20,7 @@ import (
 
 const ( // clopen is the most important soft constraint to optimize for, then fairness, then hours gap
 	weightHoursGap  = 1.0
-	weightFairness  = 4.0
+	weightFairness  = 3.0
 	weightClopen    = 2.0
 	weightOverstaff = 4.0
 )
